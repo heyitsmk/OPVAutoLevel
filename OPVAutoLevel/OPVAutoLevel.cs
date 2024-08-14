@@ -10,6 +10,7 @@ using Eleon.Modding;
 using YamlDotNet.Serialization;
 using Vector3 = UnityEngine.Vector3;
 using Quaternion = UnityEngine.Quaternion;
+using System.Threading.Tasks;
 
 namespace OPVAutoLevel
 {
@@ -53,9 +54,9 @@ namespace OPVAutoLevel
                     SenderType = Eleon.SenderType.ServerPrio
                 });
             }
-            new Thread(() =>
+            Task.Run(async () =>
             {
-                Thread.Sleep(ActivationDelay * 1000);                
+                await Task.Delay(ActivationDelay * 1000);
                 foreach (var player in pf.Players)
                 {
                     Api.Application.SendChatMessage(new MessageData()
@@ -67,7 +68,7 @@ namespace OPVAutoLevel
                     });
                 }
                 e.MoveStop();
-                Thread.Sleep(5000);
+                await Task.Delay(5000);
                 AutoLevel(e);
                 foreach (var player in pf.Players)
                 {
@@ -79,7 +80,7 @@ namespace OPVAutoLevel
                         SenderType = Eleon.SenderType.ServerPrio
                     });
                 }
-            }).Start();
+            });
         }
 
         internal void MessageAllPlayers(IPlayfield pf, string message)
