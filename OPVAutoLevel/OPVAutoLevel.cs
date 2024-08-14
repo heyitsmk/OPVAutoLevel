@@ -8,43 +8,37 @@ using System.Threading;
 using Eleon;
 using Eleon.Modding;
 using YamlDotNet.Serialization;
+using Vector3 = UnityEngine.Vector3;
+using Quaternion = UnityEngine.Quaternion;
 
 namespace OPVAutoLevel
 {
     public class OPVAutoLevel : IMod
     { 
         private readonly Dictionary<string, PlayfieldManager> _playfields = new Dictionary<string, PlayfieldManager>();
+        private bool _loaded = false;
+        private string _version = "";
 
-        internal BlockService BlockService { get; private set; } = null!;
+        internal int ActivationDelay { get; private set; } = 15;
         internal IModApi Api { get; private set; } = null!;
-
+        internal BlockService BlockService { get; private set; } = null!;
+        internal bool EnableCores { get; private set; }
+        internal bool EnableGenerators { get; private set; }
+        internal bool EnableThrusters { get; private set; }    
+        
         public void Init(IModApi modAPI)
         {            
             Api = modAPI;
             Api.Log("OPVAutoLevelMod - Initializing");
             Api.Log("OPVAutoLevelMod - Parsing Block Configs");
-            try
+            _loaded = LoadConfig();
+            if (_loaded)
             {
-                string assemblyPath = Assembly.GetExecutingAssembly().Location;
-                string assemblyDirectory = Path.GetDirectoryName(assemblyPath);
-                var yamlContent = File.ReadAllText(assemblyDirectory + "\\OPVAutoLevel_Info.yaml");
-                var deserializer = new DeserializerBuilder()
-                    .Build();
-                var yamlDict = deserializer.Deserialize<Dictionary<string, object>>(yamlContent);
-                var configPath = ((string)yamlDict["ConfigPath"]).TrimEnd('\\') + "\\BlocksConfig.ecf";
-                Api.Log($"Config Path: {configPath}");
-                BlockService = new BlockService(configPath);
+                Api.Application.OnPlayfieldLoaded += Application_OnPlayfieldLoaded;
+                Api.Application.OnPlayfieldUnloading += Application_OnPlayfieldUnloading;
+                Api.Application.Update += Application_Update;
             }
-            catch (Exception ex)
-            {
-                Api.Log("OPVAutoLevelMod - Error loading block config");
-                Api.Log("OPVAutoLevelMod - " + ex.ToString());
-                return;
-            }
-            Api.Application.ChatMessageSent += Application_ChatMessageSent;
-            Api.Application.OnPlayfieldLoaded += Application_OnPlayfieldLoaded;
-            Api.Application.OnPlayfieldUnloading += Application_OnPlayfieldUnloading;
-            Api.Application.Update += Application_Update;
+            Api.Application.ChatMessageSent += Application_ChatMessageSent;            
         }
 
         internal void OnEntityDisabled(IPlayfield pf, IEntity e)
@@ -54,17 +48,37 @@ namespace OPVAutoLevel
                 Api.Application.SendChatMessage(new MessageData()
                 {
                     RecipientEntityId = player.Key,
-                    Text = $"{e.Name} has been disabled and will be auto-rotated in 15 seconds.",
+                    Text = $"{e.Name} has been disabled and will be auto-rotated in {ActivationDelay} seconds.",
                     Channel = Eleon.MsgChannel.SinglePlayer,
                     SenderType = Eleon.SenderType.ServerPrio
                 });
             }
             new Thread(() =>
             {
-                Thread.Sleep(15000);
+                Thread.Sleep(ActivationDelay * 1000);                
+                foreach (var player in pf.Players)
+                {
+                    Api.Application.SendChatMessage(new MessageData()
+                    {
+                        RecipientEntityId = player.Key,
+                        Text = $"Beginning auto-levelling of {e.Name} - please wait 5 seconds",
+                        Channel = Eleon.MsgChannel.SinglePlayer,
+                        SenderType = Eleon.SenderType.ServerPrio
+                    });
+                }
                 e.MoveStop();
-                float zAngle = e.Rotation.eulerAngles.z;                
-                e.Rotation = UnityEngine.Quaternion.Euler(0, 0, zAngle);
+                Thread.Sleep(5000);
+                AutoLevel(e);
+                foreach (var player in pf.Players)
+                {
+                    Api.Application.SendChatMessage(new MessageData()
+                    {
+                        RecipientEntityId = player.Key,
+                        Text = $"Auto-levelling of {e.Name} complete.",
+                        Channel = Eleon.MsgChannel.SinglePlayer,
+                        SenderType = Eleon.SenderType.ServerPrio
+                    });
+                }
             }).Start();
         }
 
@@ -89,7 +103,7 @@ namespace OPVAutoLevel
                 Api.Application.SendChatMessage(new MessageData()
                 {
                     RecipientEntityId = chatMsgData.SenderEntityId,
-                    Text = "OPVAutoLevelMod v0.1",
+                    Text = $"OPVAutoLevelMod v{_version} - Cores: {EnableCores} Thrusters: {EnableThrusters} Generators: {EnableGenerators} Delay: {ActivationDelay}",
                     Channel = Eleon.MsgChannel.SinglePlayer,
                     SenderType = Eleon.SenderType.System
                 });
@@ -146,6 +160,48 @@ namespace OPVAutoLevel
                 Api.LogError(ex.Message);
             }
         }
+
+        private bool LoadConfig()
+        {
+            try
+            {
+                string assemblyPath = Assembly.GetExecutingAssembly().Location;
+                string assemblyDirectory = Path.GetDirectoryName(assemblyPath);
+                var yamlContent = File.ReadAllText(assemblyDirectory + "\\OPVAutoLevel_Info.yaml");
+                var deserializer = new DeserializerBuilder().Build();
+                var yamlDict = deserializer.Deserialize<Dictionary<string, object>>(yamlContent);
+                var configPath = ((string)yamlDict["ConfigPath"]).TrimEnd('\\') + "\\BlocksConfig.ecf";
+                Api.Log($"Config Path: {configPath}");
+                BlockService = new BlockService(configPath);
+                if (yamlDict.TryGetValue("EnableCores", out object value))
+                    EnableCores = bool.Parse((string)value);
+                if (yamlDict.TryGetValue("EnableGenerators", out value))
+                    EnableGenerators = bool.Parse((string)value);
+                if (yamlDict.TryGetValue("EnableThrusters", out value))
+                    EnableThrusters = bool.Parse((string)value);
+                if (yamlDict.TryGetValue("Version", out value))
+                    _version = (string)value;
+                if (yamlDict.TryGetValue("ActivationDelay", out value))
+                    ActivationDelay = int.Parse((string)value);
+            }
+            catch (Exception ex)
+            {
+                Api.Log($"OPVAutoLevel - Load Config - {ex.Message}");
+            }
+            return true;
+        }
+
+        private void AutoLevel(IEntity e)
+        {
+            var forward = e.Rotation * Vector3.forward;
+            var forwardXZ = new Vector3(forward.x, 0, forward.z);
+            forwardXZ.Normalize();
+            var desiredRotation = Quaternion.LookRotation(forwardXZ, Vector3.up);
+            var finalRotation = Quaternion.FromToRotation(Vector3.forward, forwardXZ);
+            var alignedRotation = Quaternion.Euler(0, finalRotation.eulerAngles.y, 0);
+            e.Rotation = alignedRotation;
+        }
+
 
         public void Shutdown()
         {

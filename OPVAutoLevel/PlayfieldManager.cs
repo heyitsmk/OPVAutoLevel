@@ -66,9 +66,7 @@ namespace OPVAutoLevel
             {
                 var id = kvp.Key;
                 var e = kvp.Value;
-                if (_trackedEntities.ContainsKey(id))
-                    continue;
-                if (_ignoredEntities.Contains(id))
+                if (_trackedEntities.ContainsKey(id) || _ignoredEntities.Contains(id))
                     continue;
                 if (IsValidEntity(e))
                 {
@@ -113,23 +111,23 @@ namespace OPVAutoLevel
 
         private bool IsDisabled(IEntity e)
         {            
-            if (e.Structure.CoreType == CoreType.None)
+            if (_mod.EnableCores && e.Structure.CoreType == CoreType.None)
             {
                 _mod.Api.Log($"OPVAutoLevel - Disabled Check - Core removed from {e.Name}:{e.Id} - marking as disabled");
                 return true;
             }
-            if (!e.Structure.IsPowered)
+            if (_mod.EnableGenerators && !e.Structure.IsPowered)
             {
                 _mod.Api.Log($"OPVAutoLevel - Disabled Check - {e.Name}:{e.Id} is no longer powered - marking as disabled");
                 return true;
             }
             var blocks = EnumerateBlocks(e);
-            if (blocks.All(b => !_mod.BlockService.Thrusters.ContainsKey(b)))
+            if (_mod.EnableThrusters && blocks.All(b => !_mod.BlockService.Thrusters.ContainsKey(b)))
             {
                 _mod.Api.Log($"OPVAutoLevel - Disabled Check - {e.Name}:{e.Id} has no thrusters - marking as disabled");
                 return true;
             }
-            if (blocks.All(b => !_mod.BlockService.Thrusters.ContainsKey(b)))
+            if (_mod.EnableGenerators && blocks.All(b => !_mod.BlockService.Thrusters.ContainsKey(b)))
             {
                 _mod.Api.Log($"OPVAutoLevel - Disabled Check - {e.Name}:{e.Id} has no generators - marking as disabled");
                 return true;
