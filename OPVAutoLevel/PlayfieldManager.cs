@@ -98,9 +98,9 @@ namespace OPVAutoLevel
                         if (b != null) 
                         {
                             b.Get(out int type, out int _, out int _, out bool _);
-                            if (type != 0 && _blockIdToName.ContainsKey(type) && _mod.BlockService.BlockLookup.ContainsKey(_blockIdToName[type]))
+                            if (type != 0 && _blockIdToName.ContainsKey(type) && _mod.BlockService.BlocksByName.ContainsKey(_blockIdToName[type]))
                             { 
-                                blocks.Add(_mod.BlockService.BlockLookup[_blockIdToName[type]].Name);
+                                blocks.Add(_mod.BlockService.BlocksByName[_blockIdToName[type]].Name);
                             }
                         }                            
                     }
