@@ -12,18 +12,16 @@ namespace OPVAutoLevel
 {
     public class BlockService
     {
-        public ReadOnlyDictionary<string, Block> BlockLookup { get; private set; }
+        public ReadOnlyDictionary<string, Block> BlocksByName { get; private set; }
         public ReadOnlyCollection<Block> Blocks { get; private set; }
-        public ReadOnlyDictionary<string, Block> Generators { get; private set; }
-        public ReadOnlyDictionary<string, Block> Thrusters { get; private set; }
+        public ReadOnlyDictionary<string, ReadOnlyCollection<Block>> BlocksByClass { get; private set; }
+        public ReadOnlyCollection<string> Classes { get; private set; }
 
         public BlockService(string configPath)
         {
             var blockConfig = new EcfFile(configPath);
-            var blockObjects = blockConfig.ParseObjects();            
+            var blockObjects = blockConfig.ParseObjects();
             var blockNameLookup = new Dictionary<string, Block>();
-            var generators = new Dictionary<string, Block>();
-            var thrusters = new Dictionary<string, Block>();
             var blockList = new List<Block>();
             foreach (var blockObject in blockObjects)
             {
@@ -31,19 +29,25 @@ namespace OPVAutoLevel
                 blockNameLookup.Add(block.Name, block);
             }
             Blocks = new ReadOnlyCollection<Block>(blockNameLookup.Select(kvp => kvp.Value).OrderBy(b => b.Name).ToList());
-            BlockLookup = new ReadOnlyDictionary<string, Block>(blockNameLookup);
+            BlocksByName = new ReadOnlyDictionary<string, Block>(blockNameLookup);
+            var blockClassLookup = new Dictionary<string, List<Block>>();
             foreach (var block in Blocks)
             {
-                if (block.GetClass() != null)
+                var blockClasses = block.GetClasses();
+                foreach (var blockClass in blockClasses)
                 {
-                    if (block.GetClass() == "Thruster")
-                        thrusters.Add(block.Name, block);
-                    else if (block.GetClass() == "Generator")
-                        generators.Add(block.Name, block);
+                    if (blockClassLookup.TryGetValue(blockClass, out List<Block>? value))
+                        value.Add(block);
+                    else
+                        blockClassLookup.Add(blockClass, new List<Block>() { block });
                 }
             }
-            Generators = new ReadOnlyDictionary<string, Block>(generators);
-            Thrusters = new ReadOnlyDictionary<string, Block>(thrusters);
+            BlocksByClass = new ReadOnlyDictionary<string, ReadOnlyCollection<Block>>(
+                blockClassLookup.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => new ReadOnlyCollection<Block>(kvp.Value)
+                ));
+            Classes = new ReadOnlyCollection<string>(BlocksByClass.Select(kvp => kvp.Key).ToList());
         }
     }
 }
