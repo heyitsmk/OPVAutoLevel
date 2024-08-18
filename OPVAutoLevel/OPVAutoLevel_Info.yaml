@@ -1,7 +1,7 @@
 ﻿Name: Disabled OVP Auto-Level
 Description: Auto-levels disabled OPVs
 Author: mk
-Version: 0.1.1
+Version: 0.1.3
 ModTargets: Dedi, PfServer
 ConfigPath: C:\Program Files (x86)\Steam\steamapps\workshop\content\383120\3143225812\Content\Configuration
 EnableCores: true
